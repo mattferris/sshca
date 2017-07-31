@@ -1,0 +1,66 @@
+#!/bin/sh
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+getprefix() {
+    echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
+}
+
+# only run if a lock exists (and therefore has been called by another command)
+if [ ! -f "$basedir/cache/lock" ]; then
+    echo "error: $0 cannot be run on it's own"
+    exit 1
+fi
+
+eventobjs=$@
+
+# capture the event date
+eventdate=$(date)
+
+# read log line from stdin
+read line
+
+# prepend event date
+eventdate=$(date)
+ 
+# prepare event details
+eventfp=$(echo -n $eventdate$line | "$basedir/bin/fp")
+eventdirprefix=$(getprefix $eventfp)
+eventdir="$basedir/cache/events/$eventdirprefix/$eventfp"
+
+# make sure event directory doesn't already exist
+if [ -d "$eventdir" ]; then
+    echo "error: event fingerprint collision!"
+    exit 3
+fi
+
+line="[$eventdate] event $eventfp: $line"
+
+# output to main log file
+echo "$line" >> $basedir/cache/log
+
+# store the event
+mkdir -p "$eventdir/certs" "$eventdir/keys" "$eventdir/ids"
+echo $eventdate > "$eventdir/date"
+echo $line > "$eventdir/contents"
+
+# link event to specified objects
+for obj in $eventobjs; do
+    if [ -d "$obj" ]; then
+
+        # link the object to the event
+        objtype=$("$basedir/bin/gettype" "$obj")
+        objfp=$(basename "$obj")
+        objprefix=$(getprefix "$objfp")
+        ln -s "../../../../../${objtype}s/$objprefix/$objfp" "$eventdir/${objtype}s/$objfp"
+        ln -s "../../../../../$eventdirprefix/$eventfp" "$basedir/cache/${objtype}s/$objprefix/$objfp/events/$eventfp"
+
+    else
+        echo "error: object doesn't exist '$obj'"
+        exit 2
+    fi
+done

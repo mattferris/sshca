@@ -1,0 +1,138 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+# handle sigterm/sigint
+on_termint() {
+    echo "caught sigterm, exiting"
+    if [ -f "$basedir/cache/lock" ]; then
+        rm "$basedir/cache/lock"
+    fi
+}
+
+# setup signal handling
+trap 'on_termint' term int
+
+. "$basedir/conf/sshca.conf"
+
+if [ -z "$2" ]; then
+    echo "usage: $0 cert <serial|fingerprint>" 
+    echo "       $0 key <fingerprint>"
+    echo "       $0 id <id>"
+    exit 1
+fi
+
+getprefix() { 
+    echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
+}
+
+# define important variables
+type=$1
+id=$2
+objfp=""
+objprefix=""
+objdir=""
+spec=""
+logtype="$type"
+
+# handle the different revocation types
+case $type in
+
+    # revoke a certificate
+    cert)
+        serial=""
+        idlen=$(echo $id | wc -c)
+        if [ $idlen -lt 32 ]; then
+            objfp=$("$basedir/bin/serial2fp" $id)
+            serial=$id
+        else
+            objfp=$id
+        fi
+
+        objprefix=$(getprefix $objfp)
+        objdir="$basedir/cache/certs/$objprefix/$objfp"
+
+        if [ ! -d "$objdir" ]; then
+            echo "error: cert doesn't exist '$id'"
+            exit 3
+        fi
+
+        if [ -z "$serial" ]; then
+            serial=$(cat "$objdir/serial")
+        fi
+
+        spec="serial: $serial"
+        logtype="certificate"
+        logid="serial $serial <$fingerprint_algorithm $(echo $objfp | "$basedir/bin/nicefp")>"
+        ;;
+
+    # revoke a public key
+    key)
+        objfp=$id
+        objprefix=$(getprefix $objfp)
+        objdir="$basedir/cache/keys/$objprefix/$objfp"
+
+        if [ ! -d "$objdir" ]; then
+            echo "error: key doesn't exist '$id'"
+            exit 3
+        fi
+
+        sha1=$(cat $("$basedir/bin/lookup" key path fingerprint $objfp)/contents | "$basedir/bin/keydata" | "$basedir/bin/fp" sha1)
+        spec="sha1: $sha1"
+        logid="<$fingerprint_algorithm $(echo $objfp | "$basedir/bin/nicefp")>"
+        ;;
+
+    # revoke a key ID
+    id)
+        objfp=$(echo -n $id | "$basedir/bin/fp")
+        objprefix=$(getprefix $objfp)
+        objdir="$basedir/cache/ids/$objprefix/$objfp"
+
+        if [ ! -d "$objdir" ]; then
+            echo "error: id doesn't exist '$id'"
+            exit 3
+        fi
+
+        spec="id: $id"
+        logid="'$id'"
+        ;;
+esac
+
+# the path to the revocation entry
+revdir="$basedir/cache/revoked/$objprefix/$objfp"
+
+# check if object is already revoked
+if [ -d "$revdir" ]; then
+    echo "error: object has already been revoked"
+    exit 3
+fi
+
+# lock the ca
+if [ -f "$basedir/cache/lock" ]; then
+    echo "error: CA locked by another process"
+    exit 5
+fi
+touch "$basedir/cache/lock"
+
+# create the directory path
+mkdir -p "$revdir"
+
+# link object to revocation
+ln -s "../../../../${type}s/$objprefix/$objfp" "$revdir/object"
+echo $spec > "$revdir/spec"
+
+# prepare the log message
+logmsg="revoked $logtype $logid"
+
+# log the message
+echo $logmsg | "$basedir/bin/log" "$objdir"
+
+# remove lock
+rm "$basedir/cache/lock"
+
+# output message to stderr
+echo $logmsg 1>&2

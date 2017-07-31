@@ -1,0 +1,32 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+fingerprint_algorithm="sha1"
+
+. "$basedir/conf/sshca.conf"
+
+if [ ! -z "$1" ]; then
+    case $1 in
+        sha512) ;;
+        sha256) ;;
+        sha1) ;;
+        md5) ;;
+        *)
+            echo "error: unsupported algoritm '$1', available alorithms: md5 sha1 sha256 sha512"
+            exit 1
+            ;;
+    esac
+    fingerprint_algorithm=$1
+fi
+
+if [ -z "$(which "${fingerprint_algorithm}sum")" ]; then
+    echo "error: can't find ${fingerprint_algorithm}sum command"
+    exit 2
+fi
+
+cat /dev/stdin | "${fingerprint_algorithm}sum" | cut -d' ' -f1

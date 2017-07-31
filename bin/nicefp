@@ -1,0 +1,12 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+data=""
+while read in; do
+    data="$data$in"
+done
+
+len=$(echo -n $data | wc -c)
+let finallen=len/2-1+len;
+echo -n $data | sed -r 's/(..)/\1:/g' | cut -b1-$finallen

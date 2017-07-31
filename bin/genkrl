@@ -1,0 +1,52 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+. "$basedir/conf/sshca.conf"
+
+if [ -z "$1" ]; then
+    echo "usage: $0 { user | host }"
+    exit 1
+fi
+
+type=$1 
+file="$basedir/revoked_${type}_certs.krl"
+specfile="$file.spec"
+
+if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
+    echo "error: invalid type '$type'"
+    exit 2
+fi
+
+if [ ! -z "$2" ]; then
+    file=$1
+fi
+
+if [ ! -d "$(dirname "$file")" ]; then
+    echo "error: directory doesn't exist '$(dirname "$file")'"
+    exit 2
+fi
+
+getprefix() { 
+    echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
+}
+
+echo -n > "$specfile"
+
+objlist=$("$basedir/bin/lookup" revocation type $type)
+for fp in $objlist; do
+    cat "$basedir/cache/revoked/$(getprefix $fp)/$fp/spec" >> $specfile
+done
+
+ssh-keygen -k -f "$file" -s "$basedir/ca/id_rsa_${type}s.pub" -z $(date '+%s') "$specfile"
+
+if [ ! "$?" = 0 ]; then
+    echo "error: ssh-keygen failed while generate revocation list"
+    exit 3
+fi
+
+rm "$specfile"

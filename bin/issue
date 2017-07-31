@@ -1,0 +1,283 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+     basedir="$SSHCA_BASEDIR"
+fi
+
+# handle sigterm/sigint
+on_termint() {
+    echo "caught sigterm, exiting"
+    if [ -f "$basedir/cache/lock" ]; then
+        rm "$basedir/cache/lock"
+    fi
+}
+
+# setup signal handling
+trap 'on_termint' term int
+
+getprefix() {
+    echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
+}
+
+if [ -z "$1" ]; then
+    echo "usage: $0 { host | user } [ options ] ..."
+    exit 1
+fi
+
+type=$1
+if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
+    echo "error: must specify 'host' or 'user'"
+    exit 1
+fi
+
+. "$basedir/conf/sshca.conf"
+. "$basedir/conf/$type.conf"
+
+# preseve original cmd for renewal
+cmd="$@"
+
+shift
+pubkey=""
+for arg in $@; do
+    # test is key=value pair
+    if [ $(echo $arg | grep = | wc -l) = 0 ]; then
+        echo "error: invalid option declaration '$arg', must be key=value"
+        exit 2
+    fi
+
+    name=$(echo $arg | cut -d= -f1)
+    value=$(echo $arg | cut -d= -f2)
+
+    case $name in
+        id) id=$(echo $value | sed 's/+/ /g');;
+        principals) principals=$value;;
+        validity) validity=$value;;
+        opt_clear) opt_clear=$value;;
+        opt_force_cmd) opt_force_cmd=$value;;
+        opt_agent_fwd) opt_agent_fwd=$value;;
+        opt_port_fwd) opt_port_fwd=$value;;
+        opt_pty) opt_pty=$value;;
+        opt_user_rc) opt_user_rc=$value;;
+        opt_x11_fwd) opt_x11_fwd=$value;;
+        opt_src_addr) opt_src_addr=$value;;
+        pubkey) pubkey=$value;;
+        *) echo "error: unknown argument specified '$name'"; exit 2;;
+    esac
+done
+
+if [ -z "$id" ]; then
+    echo "error: no ID specified"
+    exit 3
+fi
+
+principallist=""
+if [ -z "$principals" ]; then
+    echo "warning: no principals specified" 1>&2
+    # set principals to (none) for logging
+    principals="(none)"
+else
+    principallist="-n $principals"
+fi
+
+validitylist=""
+if [ -z "$validity" ]; then
+    echo "warning: no validity period specified, certificate will never expire!" 1>&2
+else
+    validitylist="-V $validity"
+fi
+
+optlist=""
+hostopt=""
+
+if [ "$type" = "host" ]; then
+    hostopt="-h"
+    optlist=""
+else
+
+    # generate the list of options
+
+    # opt_clear
+    if [ "$opt_clear" = "yes" ]; then
+        optlist="-O clear"
+    fi
+
+    # opt_force_cmd
+    if [ ! -z "$opt_force_cmd" ]; then
+        optlist="$optlist -O force-command='$opt_force_cmd'"
+    fi
+
+    # opt_agent_fwd
+    if [ "$opt_agent_fwd" = "yes" ]; then
+        optlist="$optlist -O permit-agent-forwarding"
+    elif [ "$opt_agent_fwd" = "no" ]; then
+        optlist="$optlist -O no-agent-forwarding"
+    else
+        echo "error: invalid value for opt_agent_fwd '$opt_agent_fwd'"
+        exit 3
+    fi
+
+    # opt_port_fwd
+    if [ "$opt_port_fwd" = "yes" ]; then
+        optlist="$optlist -O permit-port-forwarding"
+    elif [ "$opt_port_fwd" = "no" ]; then
+        optlist="$optlist -O no-port-forwarding"
+    else
+        echo "error: invalid value for opt_port_fwd '$opt_port_fwd'"
+        exit 3
+    fi
+
+    # opt_pty
+    if [ "$opt_pty" = "yes" ]; then
+        optlist="$optlist -O permit-pty"
+    elif [ "$opt_pty" = "no" ]; then
+        optlist="$optlist -O no-pty"
+    else
+        echo "error: invalid value for opt_pty '$opt_pty'"
+        exit 3
+    fi
+
+    # opt_user_rc
+    if [ "$opt_user_rc" = "yes" ]; then
+        optlist="$optlist -O permit-user-rc"
+    elif [ "$opt_user_rc" = "no" ]; then
+        optlist="$optlist -O no-user-rc"
+    else
+        echo "error: invalid value for opt_user_rc '$opt_user_rc'"
+        exit 3
+    fi
+
+    # opt_x11_fwd
+    if [ "$opt_x11_fwd" = "yes" ]; then
+        optlist="$optlist -O permit-x11-forwarding"
+    elif [ "$opt_x11_fwd" = "no" ]; then
+        optlist="$optlist -O no-x11-forwarding"
+    else
+        echo "error: invalid value for opt_x11_fwd '$opt_x11_fwd'"
+        exit 3
+    fi
+
+    # opt_src_addr
+    if [ ! -z "$opt_src_addr" ]; then
+        optlist="$optlist -O source-address='$opt_src_addr'"
+    fi
+fi
+
+# convert the option list to a friendly string for logging
+optstr=$(echo $optlist | sed 's/-O //g' | sed 's/ /,/g')
+
+# check if public key exists
+if [ -z "$pubkey" ]; then
+    echo "error: no public key specified (pubkey=/path/to/key)"
+    exit 3
+fi
+if [ ! -f "$pubkey" ]; then
+    echo "error: public key '$pubkey' doesn't exist"
+    exit 4
+fi
+
+# lock the ca
+if [ -f "$basedir/cache/lock" ]; then
+    echo "error: CA locked by another process"
+    exit 5
+fi
+touch "$basedir/cache/lock"
+
+# get certificate index
+index=1
+if [ -f "$basedir/cache/index" ]; then
+    index=$(cat "$basedir/cache/index")
+fi
+
+# store the id
+idfp="$(echo -n $id | "$basedir/bin/fp")"
+iddirprefix="$(getprefix $idfp)"
+iddir="$basedir/cache/ids/$iddirprefix/$idfp"
+if [ ! -d "$iddir" ]; then
+    mkdir -p "$iddir/certs" "$iddir/keys" "$iddir/events"
+    echo "$id" > "$iddir/contents"
+    # add to type index
+    idindexdir="$basedir/cache/indexes/${type}_objects/$iddirprefix"
+    mkdir -p "$idindexdir"
+    ln -s "../../../../ids/$iddirprefix/$idfp" "$idindexdir/$idfp"
+fi
+
+# store the public key
+pubkeyfp=$(cat "$pubkey" | "$basedir/bin/keydata" | "$basedir/bin/fp")
+pubkeynicefp="$fingerprint_algorithm $(echo $pubkeyfp | "$basedir/bin/nicefp")"
+keydirprefix="$(getprefix $pubkeyfp)"
+keydir="$basedir/cache/keys/$keydirprefix/$pubkeyfp"
+if [ ! -d "$keydir" ]; then
+    mkdir -p "$keydir/certs" "$keydir/events" "$keydir/ids"
+    cp "$pubkey" "$keydir/contents"
+    # add to type index
+    keyindexdir="$basedir/cache/indexes/${type}_objects/$keydirprefix"
+    mkdir -p "$keyindexdir"
+    ln -s "../../../../keys/$keydirprefix/$pubkeyfp" "$keyindexdir/$pubkeyfp"
+else
+    echo "info: found public key in cache, using cached version <$pubkeynicefp>" 1>&2
+fi
+
+# do key->id linking if none exists
+if [ ! -h "$keydir/ids/$idfp" ]; then
+    ln -s "../../../../../ids/$iddirprefix/ids/$idfp" "$keydir/ids" # link key to id
+    ln -s "../../../../../ids/$iddirprefix/$idfp" "$iddir/keys/$pubkeyfp" # link id to key
+fi
+
+ssh-keygen -s "$basedir/ca/id_rsa_${type}s" $hostopt -I "$id" -z $index $principallist $validitylist $optlist "$keydir/contents" > /dev/null 2>&1
+
+if [ ! "$?" = "0" ]; then
+    echo "error: ssh-keygen failed, no certificate generated"
+
+    # remove key and id if they were just added (i.e. no linked events)
+    if [ "$(ls -1 "$keydir/events" | wc -l)" = "0" ]; then
+        rm -r "$keydir"
+    fi
+    if [ "$(ls -1 "$iddir/events" | wc -l)" = "0" ]; then
+        rm -r "$iddir"
+    fi
+
+    rm "$basedir/cache/lock"
+    exit 6
+fi
+
+# store the certificate
+certfile="$keydir/contents-cert.pub"
+cakeyfp="$( cat "$basedir/ca/id_rsa_${type}s.pub" | "$basedir/bin/keydata" | "$basedir/bin/fp")"
+certfp="$(echo -n "$cakeyfp$index" | "$basedir/bin/fp")"
+certnicefp="$fingerprint_algorithm $(echo $certfp | "$basedir/bin/nicefp")"
+certdirprefix="$(getprefix $certfp)"
+certdir="$basedir/cache/certs/$certdirprefix/$certfp"
+mkdir -p "$certdir/events" 
+mv "$certfile" "$certdir/contents"
+echo "$cmd" > "$certdir/origin"
+echo "$index" > "$certdir/serial"
+ln -s "../../../../keys/$keydirprefix/$pubkeyfp" "$certdir/key" # link cert to key
+ln -s "../../../../ids/$iddirprefix/$idfp" "$certdir/id" # link cert to id
+ln -s "../../../../../certs/$certdirprefix/$certfp" "$keydir/certs/$certfp" # link key to cert
+ln -s "../../../../../certs/$certdirprefix/$certfp" "$iddir/certs/$certfp" # link id to cert
+
+# link certificate to type index
+certindexdir="$basedir/cache/indexes/${type}_objects/$certdirprefix"
+mkdir -p "$certindexdir"
+ln -s "../../../../certs/$certdirprefix/$certfp" "$certindexdir/$certfp"
+
+logmsg="issued certificate $index <$certnicefp> for $type '$id': public key <$pubkeynicefp>, principals $principals, validity $validity, options $optstr"
+
+# prepare any additional log messaging that's passed
+if [ ! -z "$LOG_MSG" ]; then
+    logmsg="$logmsg: $LOG_MSG"
+fi
+
+# increment the serial
+let nextindex=index+1
+echo "$nextindex" > "$basedir/cache/index"
+
+echo $logmsg 1>&2
+echo $logmsg | "$basedir/bin/log" "$certdir" "$keydir" "$iddir"
+
+# remove lock
+rm "$basedir/cache/lock"
+
+cat "$certdir/contents"

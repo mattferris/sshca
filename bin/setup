@@ -1,0 +1,15 @@
+#!/bin/sh
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+echo "generating user certificate signing key..."
+ssh-keygen -t rsa -b 2048 -f "$basedir/ca/id_rsa_users"
+
+echo "generating host certificate signing key..."
+ssh-keygen -t rsa -b 2048 -f "$basedir/ca/id_rsa_hosts"
+
+echo "setup done"

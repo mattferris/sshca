@@ -1,0 +1,42 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+if [ -z "$1" ]; then
+    echo "usage: $0 { cert | event | id | key } <fingerprint>"
+    echo "       $0 all"
+    exit 1
+fi
+
+getprefix() {
+    echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
+}
+
+type=$1
+fp=$2
+prefix=$(getprefix $fp)
+typedir="$basedir/cache/${type}s/$prefix/$fp"
+
+if [ ! "$type" = "all" -a ! -d "$typedir" ]; then
+    echo "error: $type doesn't exist '$fp'"
+    exit 1
+fi
+
+eventlist=""
+case $type in
+    all) eventlist=$(ls -1rt "$basedir"/cache/events/*/*);;
+    cert) eventlist=$(ls -1rt "$typedir/events");;
+    event) eventlist=$fp;;
+    id) eventlist=$(ls -1rt "$typedir/events");;
+    key) eventlist=$(ls -1rt "$typedir/events");;
+    *) echo "error: invalid type '$type"; exit 2;;
+esac
+
+for fp in $eventlist; do
+    prefix=$(getprefix $fp)
+    cat "$basedir/cache/events/$prefix/$fp/contents"
+done
