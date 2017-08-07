@@ -6,12 +6,16 @@ if [ ! -z "$SSHCA_BASEDIR" ]; then
     basedir="$SSHCA_BASEDIR"
 fi
  
+bindir="$basedir/bin"
+cachedir="$basedir/cache"
+confdir="$basedir/conf"
+
+. "$confdir/sshca.conf"
+
 if [ -z "$2" ]; then
     echo "usage: $0 { serial | fingerprint } <value>"
     exit 1
 fi
-
-. "$basedir/conf/sshca.conf"
 
 getprefix() { 
     echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
@@ -21,7 +25,7 @@ idtype=$1
 id=""
 
 case $idtype in
-    serial) id=$("$basedir/bin/serial2fp" $2);;
+    serial) id=$("$bindir/serial2fp" $2);;
     fingerprint) id=$(echo -n $2 | sed s/://g);;
     *)
         echo "error: invalid ID type '$idtype'"
@@ -30,7 +34,7 @@ case $idtype in
 esac
 
 prefix=$(getprefix $id)
-certdir="$basedir/cache/certs/$prefix/$id"
+certdir="$cachedir/certs/$prefix/$id"
 
 if [ ! -f "$certdir/origin" ]; then
     echo "error: can't find certificate origin '$certdir/origin'"
@@ -38,7 +42,7 @@ if [ ! -f "$certdir/origin" ]; then
 fi
 
 origin=$(cat "$certdir/origin")
-fp=$(echo $id | "$basedir/bin/nicefp")
+fp=$(echo $id | "$bindir/nicefp")
 
 export LOG_MSG="renewal of certificate <$fingerprint_algorithm $fp>"
-exec "$basedir/bin/issue" $origin
+exec "$bindir/issue" $origin

@@ -6,7 +6,11 @@ if [ ! -z "$SSHCA_BASEDIR" ]; then
     basedir="$SSHCA_BASEDIR"
 fi
 
-. "$basedir/conf/sshca.conf"
+bindir="$basedir/bin"
+cachedir="$basedir/cache"
+confdir="$basedir/conf"
+
+. "$confdir/sshca.conf"
  
 if [ -z "$2" ]; then
     echo "usage: $0 cert { contents | details | fingerprint | history | id | key | origin | path | serial } { fingerprint | serial } <value>"
@@ -30,13 +34,13 @@ case $type in
 
     cert)
         case $idtype in
-            serial) id=$("$basedir/bin/serial2fp" $4);;
+            serial) id=$("$bindir/serial2fp" $4);;
             fingerprint) id=$(echo -n $4 | sed s/://g);;
             *) echo "error: invalid ID type '$idtype'"; exit 2;;
         esac
 
         prefix=$(getprefix $id)
-        certdir="$basedir/cache/certs/$prefix/$id"
+        certdir="$cachedir/certs/$prefix/$id"
 
         if [ ! -d "$certdir" ]; then
             echo "error: certificate not found '$id'"
@@ -46,12 +50,12 @@ case $type in
         case $attr in
             contents) cat "$certdir/contents";;
             details) ssh-keygen -Lf "$certdir/contents";;
-            fingerprint) echo "$fingerprint_algorithm $(basename $certdir | "$basedir/bin/fp" | "$basedir/bin/nicefp")";;
-            history) "$basedir/bin/history" cert "$id";;
+            fingerprint) echo "$fingerprint_algorithm $(basename $certdir | "$bindir/fp" | "$bindir/nicefp")";;
+            history) "$bindir/history" cert "$id";;
             id)
                 id=$(basename $(readlink "$certdir/id"))
                 idprefix=$(getprefix $id)
-                echo $id $(cat "$basedir/cache/ids/$idprefix/$id/contents")
+                echo $id $(cat "$cachedir/ids/$idprefix/$id/contents")
                 ;;
             key) echo $(basename $(readlink "$certdir/key"));;
             origin) cat "$certdir/origin";;
@@ -69,24 +73,24 @@ case $type in
                     echo "error: pubkey file doesn't exist '$file'"
                     exit 2
                 fi
-                id=$(cat "$file" | "$basedir/bin/keydata" | "$basedir/bin/fp")
+                id=$(cat "$file" | "$bindir/keydata" | "$bindir/fp")
                 ;;
             fingerprint)
                 id=$(echo -n $4 | sed s/://g)
                 ;;
             serial)
-                certid=$("$basedir/bin/serial2fp" $4)
+                certid=$("$bindir/serial2fp" $4)
                 prefix=$(getprefix $certid)
-                id=$(basename $(readlink "$basedir/cache/certs/$prefix/$certid/key"))
+                id=$(basename $(readlink "$cachedir/certs/$prefix/$certid/key"))
                 ;;
             stdin)
-                id=$(cat /dev/stdin | "$basedir/bin/keydata" | "$basedir/bin/fp")
+                id=$(cat /dev/stdin | "$bindir/keydata" | "$bindir/fp")
                 ;;
             *) echo "error: invalid ID type '$idtype'"; exit 2;;
         esac
 
         prefix=$(getprefix $id)
-        keydir="$basedir/cache/keys/$prefix/$id"
+        keydir="$cachedir/keys/$prefix/$id"
 
         if [ ! -d "$keydir" ]; then
             echo "error: key not found '$id'"
@@ -96,12 +100,12 @@ case $type in
         case $attr in
             certs) ls -1 "$keydir/certs";;
             contents) cat "$keydir/contents";;
-            fingerprint) echo "$fingerprint_algorithm $(cat $keydir/contents | "$basedir/bin/keydata" | "$basedir/bin/fp" | "$basedir/bin/nicefp")";;
-            history) "$basedir/bin/history" key "$id";;
+            fingerprint) echo "$fingerprint_algorithm $(cat $keydir/contents | "$bindir/keydata" | "$bindir/fp" | "$bindir/nicefp")";;
+            history) "$bindir/history" key "$id";;
             ids) 
                 for id in $(ls -1 "$keydir/ids"); do
                     idprefix=$(getprefix $id)
-                    idname=$(cat "$basedir/cache/ids/$idprefix/$id/contents")
+                    idname=$(cat "$cachedir/ids/$idprefix/$id/contents")
                     echo "$id $idname"
                 done
                 ;;
@@ -112,9 +116,9 @@ case $type in
 
     id)
         id=$3
-        idfp=$(echo -n $id | "$basedir/bin/fp")
+        idfp=$(echo -n $id | "$bindir/fp")
         prefix=$(getprefix $idfp)
-        iddir="$basedir/cache/ids/$prefix/$idfp"
+        iddir="$cachedir/ids/$prefix/$idfp"
 
         if [ ! -d "$iddir" ]; then
             echo "error: id not found '$id'"
@@ -123,7 +127,7 @@ case $type in
 
         case $attr in
             certs) ls -1 "$iddir/certs";;
-            history) "$basedir/bin/history" id $idfp;;
+            history) "$bindir/history" id $idfp;;
             keys) ls -1 "$iddir/keys";;
             path) echo "$iddir";;
             *) echo "error: invalid attribute '$attr'"; exit 2;;
@@ -133,7 +137,7 @@ case $type in
     event)
         eventfp=$3
         prefix=$(getprefix $eventfp)
-        eventdir="$basedir/cache/events/$prefix/$eventfp"
+        eventdir="$cachedir/events/$prefix/$eventfp"
 
         if [ ! -d "$eventdir" ]; then
             echo "error: event not found '$eventdir'"
@@ -155,41 +159,41 @@ case $type in
         objlist=""
 
         # just exit if no certificates have been revoked
-        if [ ! -d "$basedir/cache/revoked" ]; then
+        if [ ! -d "$cachedir/revoked" ]; then
             exit
         fi
 
         case $attr in
             all)
-                objlist="$(cd "$basedir"; ls -1rt cache/revoked/*/*)"
+                objlist="$(cd "$cachedir"; ls -1rt revoked/*/*)"
                 ;;
             id)
-                idfp=$(echo -n $id | "$basedir/bin/fp")
+                idfp=$(echo -n $id | "$bindir/fp")
                 prefix=$(getprefix $idfp)
-                idlist=$(cd "$basedir"; ls -1rt cache/revoked/*/*)
+                idlist=$(cd "$cachedir"; ls -1rt revoked/*/*)
                 for fp in "$idlist"; do
                     pfx=$(getprefix $fp)
-                    if [ -d "$basedir/cache/ids/$pfx/$fp" ]; then
+                    if [ -d "$cachedir/ids/$pfx/$fp" ]; then
                         objlist="$objlist $fp"
                     fi
                 done
                 ;;
             key)
-                keyfp=$(echo -n $id | "$basedir/bin/fp")
+                keyfp=$(echo -n $id | "$bindir/fp")
                 prefix=$(getprefix $keyfp)
-                keylist=$(cd "$basedir"; ls -1rt cache/revoked/*/*)
+                keylist=$(cd "$cachedir"; ls -1rt revoked/*/*)
                 for fp in "$keylist"; do
                     pfx=$(getprefix $fp)
-                    if [ -d "$basedir/cache/keys/$pfx/$fp" ]; then
+                    if [ -d "$cachedir/keys/$pfx/$fp" ]; then
                         objlist="$objlist $fp"
                     fi
                 done
                 ;;
             type)
-                typelist=$(cd "$basedir"; ls -1rt cache/revoked/*/*)
+                typelist=$(cd "$cachedir"; ls -1rt revoked/*/*)
                 for fp in "$typelist"; do
                     pfx=$(getprefix $fp)
-                    if [ -h "$basedir/cache/indexes/${id}_objects/$pfx/$fp" ]; then
+                    if [ -h "$cachedir/indexes/${id}_objects/$pfx/$fp" ]; then
                         objlist="$objlist $fp"
                     fi
                 done

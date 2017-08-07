@@ -6,7 +6,10 @@ if [ ! -z "$SSHCA_BASEDIR" ]; then
     basedir="$SSHCA_BASEDIR"
 fi
 
-. "$basedir/conf/sshca.conf"
+cachedir="$basedir/cache"
+confdir="$basedir/conf"
+
+. "$confdir/sshca.conf"
 
 path=""
 basename=""
@@ -39,7 +42,7 @@ fi
     fi
 
     path=$(pwd)
-    baselen=$(echo $basedir/cache/ | wc -c)
+    baselen=$(echo "$cachedir/" | wc -c)
     partial=$(pwd | cut -b$baselen- | cut -d/ -f1)
     partiallen=$(echo $partial | wc -c)
     let partiallen=partiallen-2

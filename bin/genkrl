@@ -6,7 +6,11 @@ if [ ! -z "$SSHCA_BASEDIR" ]; then
     basedir="$SSHCA_BASEDIR"
 fi
 
-. "$basedir/conf/sshca.conf"
+bindir="$basedir/bin"
+cachedir="$basedir/cache"
+confdir="$basedir/conf"
+
+. "$confdir/sshca.conf"
 
 if [ -z "$1" ]; then
     echo "usage: $0 { user | host }"
@@ -37,9 +41,9 @@ getprefix() {
 
 echo -n > "$specfile"
 
-objlist=$("$basedir/bin/lookup" revocation type $type)
+objlist=$("$bindir/lookup" revocation type $type)
 for fp in $objlist; do
-    cat "$basedir/cache/revoked/$(getprefix $fp)/$fp/spec" >> $specfile
+    cat "$cachedir/revoked/$(getprefix $fp)/$fp/spec" >> $specfile
 done
 
 ssh-keygen -k -f "$file" -s "$basedir/ca/id_rsa_${type}s.pub" -z $(date '+%s') "$specfile"

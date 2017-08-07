@@ -6,6 +6,9 @@ if [ ! -z "$SSHCA_BASEDIR" ]; then
     basedir="$SSHCA_BASEDIR"
 fi
 
+bindir="$basedir/bin"
+cachedir="$basedir/cache"
+
 if [ -z "$1" ]; then
     echo "usage: $0 <serial>"
     exit 1
@@ -16,10 +19,10 @@ getprefix() {
 }
 
 index=$1
-certsdir="$basedir/cache/certs"
+certsdir="$cachedir/certs"
 
 # check for user cert first
-userkeyfp=$(cat "$basedir/ca/id_rsa_users.pub" | "$basedir/bin/keydata" | "$basedir/bin/fp")
+userkeyfp=$(cat "$basedir/ca/id_rsa_users.pub" | "$bindir/keydata" | "$bindir/fp")
 useridfp=$(echo -n "$userkeyfp$index" | "$basedir/bin/fp")
 userprefix=$(getprefix $useridfp)
 
@@ -29,8 +32,8 @@ if [ -d "$certsdir/$userprefix/$useridfp" ]; then
 fi
 
 # if user cert doesn't exist, then check for host cert
-hostkeyfp=$(cat "$basedir/ca/id_rsa_hosts.pub" | "$basedir/bin/keydata" | "$basedir/bin/fp")
-hostidfp=$(echo -n "$userkeyfp$index" | "$basedir/bin/fp")
+hostkeyfp=$(cat "$basedir/ca/id_rsa_hosts.pub" | "$bindir/keydata" | "$bindir/fp")
+hostidfp=$(echo -n "$userkeyfp$index" | "$bindir/fp")
 hostprefix=$(getprefix $hostidfp)
 
 if [ -d "$certsdir/$hostprefix/$hostidfp" ]; then
