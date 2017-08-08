@@ -11,13 +11,18 @@ cachedir="$basedir/cache"
 confdir="$basedir/conf"
 
 . "$confdir/sshca.conf"
+
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
  
 if [ -z "$2" ]; then
-    echo "usage: $0 cert { contents | details | fingerprint | history | id | key | origin | path | serial } { fingerprint | serial } <value>"
-    echo "       $0 key { certs | contents | fingerprint | history | ids | path } { file | fingerprint | serial | stdin } [ <value> ]"
-    echo "       $0 id { certs | history | keys | path } <id>"
-    echo "       $0 event { certs | contents | ids | keys | path } <fingerprint>"
-    echo "       $0 revocation { all | id <value> | key <fingerprint> | type { user | host } }"
+    echo "usage: $_zero cert { contents | details | fingerprint | history | id | key | origin | path | serial } { fingerprint | serial } <value>"
+    echo "       $_zero key { certs | contents | fingerprint | history | ids | path } { file | fingerprint | serial | stdin } [ <value> ]"
+    echo "       $_zero id { certs | history | keys | path } <id>"
+    echo "       $_zero event { certs | contents | ids | keys | path } <fingerprint>"
+    echo "       $_zero revocation { all | id <value> | key <fingerprint> | type { user | host } }"
     exit 1
 fi
 

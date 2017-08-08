@@ -23,10 +23,15 @@ on_termint() {
 # setup signal handling
 trap 'on_termint' term int
 
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
+
 if [ -z "$2" ]; then
-    echo "usage: $0 cert <serial|fingerprint>" 
-    echo "       $0 key <fingerprint>"
-    echo "       $0 id <id>"
+    echo "usage: $_zero cert <serial|fingerprint>" 
+    echo "       $_zero key <fingerprint>"
+    echo "       $_zero id <id>"
     exit 1
 fi
 

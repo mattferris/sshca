@@ -8,9 +8,14 @@ fi
 
 cachedir="$basedir/cache"
 
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
+
 if [ -z "$1" ]; then
-    echo "usage: $0 { cert | event | id | key } <fingerprint>"
-    echo "       $0 all"
+    echo "usage: $_zero { cert | event | id | key } <fingerprint>"
+    echo "       $_zero all"
     exit 1
 fi
 

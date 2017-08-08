@@ -9,8 +9,13 @@ fi
 bindir="$basedir/bin"
 cachedir="$basedir/cache"
 
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
+
 if [ -z "$1" ]; then
-    echo "usage: $0 <serial>"
+    echo "usage: $_zero <serial>"
     exit 1
 fi 
 

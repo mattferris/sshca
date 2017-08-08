@@ -1,0 +1,159 @@
+#!/bin/bash
+
+basedir="/root/sshca"
+
+if [ ! -z "$SSHCA_BASEDIR" ]; then
+    basedir="$SSHCA_BASEDIR"
+fi
+
+bindir="$basedir/bin"
+confdir="$basedir/conf"
+
+. "$confdir/sshca.conf"
+
+if [ -z "$1" ]; then
+    echo "usage: $_zero command [ args ]"
+    exit 1
+fi
+
+command=$1
+shift
+
+# set calling command for sub commands
+export SSHCA_CALLING_CMD="$0 $command"
+
+case $command in
+
+    audit)
+        if [ -z "$2" ]; then
+            echo "usage: $0 { id <id> | key <key_fingerprint> }"
+        fi
+
+        type=$1
+        id=$2
+        case $type in
+            id)
+                echo -e "Key ID: $id\n"
+
+                keys=$($bindir/lookup id keys $id)
+                numkeys=$(echo $keys | wc -l)
+                echo "Found $(echo $numkeys) related public key(s):"
+                for key in $keys; do
+                    comment=$($bindir/lookup key contents fingerprint $key | cut -d' ' -f3)
+                    echo "  <$fingerprint_algorithm $(echo $key | $bindir/nicefp)> $comment"
+                done
+
+                certs=$($bindir/lookup id certs $id)
+                numcerts=$(echo $certs | wc -l)
+                echo -e "\nFound $(echo $numcerts) related certificate(s):"
+                for cert in $certs; do
+                    serial=$($bindir/lookup cert serial fingerprint $cert)
+                    echo "  <$fingerprint_algorithm $(echo $cert | $bindir/nicefp)> Serial $serial"
+                done
+
+                echo
+
+                $bindir/history id $(basename $($bindir/lookup id path $id))
+                ;;
+            key)
+                ;;
+            *)
+                echo "error: invalid type specified '$type'"
+                exit 2
+                ;;
+        esac
+        ;;
+
+    issue)
+        if [ -z "$1" ]; then
+            echo "usage $0 <profile> [ options ]"
+            exit 1
+        fi 
+
+        profile=$1
+        shift
+
+        # check profile exists
+        if [ ! -f "$confdir/profiles/$profile.conf" ]; then
+            echo "error: profile doesn't exist '$profile'"
+            exit 2
+        fi
+
+        . "$confdir/profiles/$profile.conf"
+
+        # check for valid certificate type
+        if [ -z "$cert_type" ]; then
+            echo "error: profile '$profile': no certificate type defined ('cert_type')"
+            exit 3
+        elif [ ! "$cert_type" = "host" -a ! "$cert_type" = "user" ]; then
+            echo "error: profile '$profile': invalid certificate type ('cert_type') specified, must be 'host' or 'user'"
+            exit 3
+        fi
+
+        opts="$cert_type"
+        for opt in id principals validity opt_clear opt_force_cmd opt_agent_fwd opt_port_fwd opt_pty opt_user_rc opt_x11_fwd opt_src_addr pubkey; do
+            optval=$(eval "echo \$$opt")
+            if [ ! -z "$optval" ]; then
+                opts="$opts $opt=$optval"
+            fi
+        done
+
+        opts="$opts $@"
+echo        "$bindir/issue" $opts
+
+        rtncode=$?
+        if [ $rtncode -ne 0 ]; then
+            echo "failed to issue certificate: command returned code $rtncode"
+            exit $rtncode
+        fi
+        ;;
+
+    renew)
+        if [ -z "$1" ]; then
+            $bindir/renew
+        fi
+
+        $bindir/renew $@
+
+        rtncode=$?
+        if [ $? -ne 0 ]; then
+            echo "failed to renew certificate: command returned code $rtncode"
+            exit $rtncode
+        fi
+        ;;
+
+    lookup)
+        if [ -z "$1" ]; then
+            $bindir/lookup
+        fi
+
+        $bindir/lookup $@
+        ;;
+
+    history)
+        args=$@
+        if [ -z "$1" ]; then
+            args="all"
+        fi
+
+        $bindir/history $args
+        ;;
+
+    revoke)
+        if [ -z "$1" ]; then
+            $bindir/revoke
+        fi
+
+        $bindir/revoke $@
+        ;;
+
+    setup)
+        $bindir/setup
+        ;;
+
+    *)
+        echo "error: invalid command '$command'"
+        exit 2
+        ;;
+
+esac

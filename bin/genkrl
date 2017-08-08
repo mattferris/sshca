@@ -12,8 +12,13 @@ confdir="$basedir/conf"
 
 . "$confdir/sshca.conf"
 
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
+
 if [ -z "$1" ]; then
-    echo "usage: $0 { user | host }"
+    echo "usage: $_zero { user | host }"
     exit 1
 fi
 
