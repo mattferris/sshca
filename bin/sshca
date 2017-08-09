@@ -30,13 +30,19 @@ case $command in
         id=$2
         case $type in
             id)
+                "$bindir/lookup" id path $id > /dev/null 2>&1
+                if [ $? = 3 ]; then
+                    echo "error: key ID not found '$id'"
+                    exit 3
+                fi
+
                 echo -e "Key ID: $id\n"
 
                 keys=$($bindir/lookup id keys $id)
                 numkeys=$(echo $keys | wc -l)
                 echo "Found $(echo $numkeys) related public key(s):"
                 for key in $keys; do
-                    comment=$($bindir/lookup key contents fingerprint $key | cut -d' ' -f3)
+                    comment=$($bindir/lookup key contents fingerprint $key | cut -d' '  -f3)
                     echo "  <$fingerprint_algorithm $(echo $key | $bindir/nicefp)> $comment"
                 done
 
@@ -52,8 +58,39 @@ case $command in
 
                 $bindir/history id $(basename $($bindir/lookup id path $id))
                 ;;
+
             key)
+                "$bindir/lookup" key path fingerprint $id > /dev/null 2>&1
+                if [ $? = 3 ]; then
+                    echo "error: public key not found '$id'"
+                    exit 3
+                fi
+
+                fp=$(echo $id | sed 's/://g')
+                nicefp=$(echo $fp | $bindir/nicefp)
+                comment=$($bindir/lookup key contents fingerprint $fp | cut -d' ' -f3)
+                echo -e "Public key: <$fingerprint_algorithm $nicefp> $comment\n"
+
+                ids=$($bindir/lookup key ids fingerprint $fp | cut -d' ' -f2)
+                numids=$(echo $ids | wc -l)
+                echo "Found $(echo $numids) related key ID(s):"
+                for id in $ids; do
+                    echo "  $id"
+                done
+
+                certs=$($bindir/lookup key certs fingerprint $fp)
+                numcerts=$(echo certs | wc -l)
+                echo -e "\nFound $(echo $numcerts) related certificate(s):"
+                for cert in $certs; do
+                    serial=$($bindir/lookup cert serial fingerprint $cert)
+                    echo "  <$fingerprint_algorithm $(echo $cert | $bindir/nicefp)> Serial $serial"
+                done
+
+                echo
+
+                $bindir/history key $fp
                 ;;
+
             *)
                 echo "error: invalid type specified '$type'"
                 exit 2
