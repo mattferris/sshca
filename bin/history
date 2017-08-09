@@ -1,14 +1,21 @@
 #!/bin/bash
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
+fi
+
+. "$conf"
+
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
 fi
 
 if [ -z "$1" ]; then
-    echo "usage: $0 { cert | event | id | key } <fingerprint>"
-    echo "       $0 all"
+    echo "usage: $_zero { cert | event | id | key } <fingerprint>"
+    echo "       $_zero all"
     exit 1
 fi
 
@@ -19,7 +26,7 @@ getprefix() {
 type=$1
 fp=$2
 prefix=$(getprefix $fp)
-typedir="$basedir/cache/${type}s/$prefix/$fp"
+typedir="$cachedir/${type}s/$prefix/$fp"
 
 if [ ! "$type" = "all" -a ! -d "$typedir" ]; then
     echo "error: $type doesn't exist '$fp'"
@@ -28,7 +35,7 @@ fi
 
 eventlist=""
 case $type in
-    all) eventlist=$(ls -1rt "$basedir"/cache/events/*/*);;
+    all) eventlist=$(ls -1rt "$cachedir"/events/*/*);;
     cert) eventlist=$(ls -1rt "$typedir/events");;
     event) eventlist=$fp;;
     id) eventlist=$(ls -1rt "$typedir/events");;
@@ -38,5 +45,5 @@ esac
 
 for fp in $eventlist; do
     prefix=$(getprefix $fp)
-    cat "$basedir/cache/events/$prefix/$fp/contents"
+    cat "$cachedir/events/$prefix/$fp/contents"
 done

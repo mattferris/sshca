@@ -1,16 +1,19 @@
 #!/bin/bash
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-     basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+     conf="$SSHCA_CONF"
 fi
+
+. "$conf"
+. "$confdir/$type.conf"
 
 # handle sigterm/sigint
 on_termint() {
     echo "caught sigterm, exiting"
-    if [ -f "$basedir/cache/lock" ]; then
-        rm "$basedir/cache/lock"
+    if [ -f "$cachedir/lock" ]; then
+        rm "$cachedir/lock"
     fi
 }
 
@@ -21,8 +24,13 @@ getprefix() {
     echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
 }
 
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
+
 if [ -z "$1" ]; then
-    echo "usage: $0 { host | user } [ options ] ..."
+    echo "usage: $_zero { host | user } [ options ] ..."
     exit 1
 fi
 
@@ -31,9 +39,6 @@ if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
     echo "error: must specify 'host' or 'user'"
     exit 1
 fi
-
-. "$basedir/conf/sshca.conf"
-. "$basedir/conf/$type.conf"
 
 # preseve original cmd for renewal
 cmd="$@"
@@ -178,41 +183,41 @@ if [ ! -f "$pubkey" ]; then
 fi
 
 # lock the ca
-if [ -f "$basedir/cache/lock" ]; then
+if [ -f "$cachedir/lock" ]; then
     echo "error: CA locked by another process"
     exit 5
 fi
-touch "$basedir/cache/lock"
+touch "$cachedir/lock"
 
 # get certificate index
 index=1
-if [ -f "$basedir/cache/index" ]; then
-    index=$(cat "$basedir/cache/index")
+if [ -f "$cachedir/index" ]; then
+    index=$(cat "$cachedir/index")
 fi
 
 # store the id
-idfp="$(echo -n $id | "$basedir/bin/fp")"
+idfp="$(echo -n $id | "$bindir/fp")"
 iddirprefix="$(getprefix $idfp)"
-iddir="$basedir/cache/ids/$iddirprefix/$idfp"
+iddir="$cachedir/ids/$iddirprefix/$idfp"
 if [ ! -d "$iddir" ]; then
     mkdir -p "$iddir/certs" "$iddir/keys" "$iddir/events"
     echo "$id" > "$iddir/contents"
     # add to type index
-    idindexdir="$basedir/cache/indexes/${type}_objects/$iddirprefix"
+    idindexdir="$cachedir/indexes/${type}_objects/$iddirprefix"
     mkdir -p "$idindexdir"
     ln -s "../../../../ids/$iddirprefix/$idfp" "$idindexdir/$idfp"
 fi
 
 # store the public key
-pubkeyfp=$(cat "$pubkey" | "$basedir/bin/keydata" | "$basedir/bin/fp")
-pubkeynicefp="$fingerprint_algorithm $(echo $pubkeyfp | "$basedir/bin/nicefp")"
+pubkeyfp=$(cat "$pubkey" | "$bindir/keydata" | "$bindir/fp")
+pubkeynicefp="$fingerprint_algorithm $(echo $pubkeyfp | "$bindir/nicefp")"
 keydirprefix="$(getprefix $pubkeyfp)"
-keydir="$basedir/cache/keys/$keydirprefix/$pubkeyfp"
+keydir="$cachedir/keys/$keydirprefix/$pubkeyfp"
 if [ ! -d "$keydir" ]; then
     mkdir -p "$keydir/certs" "$keydir/events" "$keydir/ids"
     cp "$pubkey" "$keydir/contents"
     # add to type index
-    keyindexdir="$basedir/cache/indexes/${type}_objects/$keydirprefix"
+    keyindexdir="$cachedir/indexes/${type}_objects/$keydirprefix"
     mkdir -p "$keyindexdir"
     ln -s "../../../../keys/$keydirprefix/$pubkeyfp" "$keyindexdir/$pubkeyfp"
 else
@@ -238,17 +243,17 @@ if [ ! "$?" = "0" ]; then
         rm -r "$iddir"
     fi
 
-    rm "$basedir/cache/lock"
+    rm "$cachedir/lock"
     exit 6
 fi
 
 # store the certificate
 certfile="$keydir/contents-cert.pub"
-cakeyfp="$( cat "$basedir/ca/id_rsa_${type}s.pub" | "$basedir/bin/keydata" | "$basedir/bin/fp")"
-certfp="$(echo -n "$cakeyfp$index" | "$basedir/bin/fp")"
-certnicefp="$fingerprint_algorithm $(echo $certfp | "$basedir/bin/nicefp")"
+cakeyfp="$( cat "$basedir/ca/id_rsa_${type}s.pub" | "$bindir/keydata" | "$bindir/fp")"
+certfp="$(echo -n "$cakeyfp$index" | "$bindir/fp")"
+certnicefp="$fingerprint_algorithm $(echo $certfp | "$bindir/nicefp")"
 certdirprefix="$(getprefix $certfp)"
-certdir="$basedir/cache/certs/$certdirprefix/$certfp"
+certdir="$cachedir/certs/$certdirprefix/$certfp"
 mkdir -p "$certdir/events" 
 mv "$certfile" "$certdir/contents"
 echo "$cmd" > "$certdir/origin"
@@ -259,7 +264,7 @@ ln -s "../../../../../certs/$certdirprefix/$certfp" "$keydir/certs/$certfp" # li
 ln -s "../../../../../certs/$certdirprefix/$certfp" "$iddir/certs/$certfp" # link id to cert
 
 # link certificate to type index
-certindexdir="$basedir/cache/indexes/${type}_objects/$certdirprefix"
+certindexdir="$cachedir/indexes/${type}_objects/$certdirprefix"
 mkdir -p "$certindexdir"
 ln -s "../../../../certs/$certdirprefix/$certfp" "$certindexdir/$certfp"
 
@@ -272,12 +277,12 @@ fi
 
 # increment the serial
 let nextindex=index+1
-echo "$nextindex" > "$basedir/cache/index"
+echo "$nextindex" > "$cachedir/index"
 
 echo $logmsg 1>&2
-echo $logmsg | "$basedir/bin/log" "$certdir" "$keydir" "$iddir"
+echo $logmsg | "$bindir/log" "$certdir" "$keydir" "$iddir"
 
 # remove lock
-rm "$basedir/cache/lock"
+rm "$cachedir/lock"
 
 cat "$certdir/contents"

@@ -1,10 +1,12 @@
 #!/bin/sh
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
 fi
+
+. "$conf"
 
 echo "generating user certificate signing key..."
 ssh-keygen -t rsa -b 2048 -f "$basedir/ca/id_rsa_users"

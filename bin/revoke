@@ -1,28 +1,33 @@
 #!/bin/bash
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
 fi
+
+. "$conf"
 
 # handle sigterm/sigint
 on_termint() {
     echo "caught sigterm, exiting"
-    if [ -f "$basedir/cache/lock" ]; then
-        rm "$basedir/cache/lock"
+    if [ -f "$cachedir/lock" ]; then
+        rm "$cachedir/lock"
     fi
 }
 
 # setup signal handling
 trap 'on_termint' term int
 
-. "$basedir/conf/sshca.conf"
+_zero=$0
+if [ ! -z "$SSHCA_CALLING_CMD" ]; then
+    _zero="$SSHCA_CALLING_CMD"
+fi
 
 if [ -z "$2" ]; then
-    echo "usage: $0 cert <serial|fingerprint>" 
-    echo "       $0 key <fingerprint>"
-    echo "       $0 id <id>"
+    echo "usage: $_zero cert <serial|fingerprint>" 
+    echo "       $_zero key <fingerprint>"
+    echo "       $_zero id <id>"
     exit 1
 fi
 
@@ -47,14 +52,14 @@ case $type in
         serial=""
         idlen=$(echo $id | wc -c)
         if [ $idlen -lt 32 ]; then
-            objfp=$("$basedir/bin/serial2fp" $id)
+            objfp=$("$bindir/serial2fp" $id)
             serial=$id
         else
             objfp=$id
         fi
 
         objprefix=$(getprefix $objfp)
-        objdir="$basedir/cache/certs/$objprefix/$objfp"
+        objdir="$cachedir/$objprefix/$objfp"
 
         if [ ! -d "$objdir" ]; then
             echo "error: cert doesn't exist '$id'"
@@ -67,30 +72,30 @@ case $type in
 
         spec="serial: $serial"
         logtype="certificate"
-        logid="serial $serial <$fingerprint_algorithm $(echo $objfp | "$basedir/bin/nicefp")>"
+        logid="serial $serial <$fingerprint_algorithm $(echo $objfp | "$bindir/nicefp")>"
         ;;
 
     # revoke a public key
     key)
         objfp=$id
         objprefix=$(getprefix $objfp)
-        objdir="$basedir/cache/keys/$objprefix/$objfp"
+        objdir="$cachedir/keys/$objprefix/$objfp"
 
         if [ ! -d "$objdir" ]; then
             echo "error: key doesn't exist '$id'"
             exit 3
         fi
 
-        sha1=$(cat $("$basedir/bin/lookup" key path fingerprint $objfp)/contents | "$basedir/bin/keydata" | "$basedir/bin/fp" sha1)
+        sha1=$(cat $("$bindir/lookup" key path fingerprint $objfp)/contents | "$bindir/keydata" | "$bindir/fp" sha1)
         spec="sha1: $sha1"
-        logid="<$fingerprint_algorithm $(echo $objfp | "$basedir/bin/nicefp")>"
+        logid="<$fingerprint_algorithm $(echo $objfp | "$bindir/nicefp")>"
         ;;
 
     # revoke a key ID
     id)
-        objfp=$(echo -n $id | "$basedir/bin/fp")
+        objfp=$(echo -n $id | "$bindir/fp")
         objprefix=$(getprefix $objfp)
-        objdir="$basedir/cache/ids/$objprefix/$objfp"
+        objdir="$cachedir/ids/$objprefix/$objfp"
 
         if [ ! -d "$objdir" ]; then
             echo "error: id doesn't exist '$id'"
@@ -103,7 +108,7 @@ case $type in
 esac
 
 # the path to the revocation entry
-revdir="$basedir/cache/revoked/$objprefix/$objfp"
+revdir="$cachedir/revoked/$objprefix/$objfp"
 
 # check if object is already revoked
 if [ -d "$revdir" ]; then
@@ -112,11 +117,11 @@ if [ -d "$revdir" ]; then
 fi
 
 # lock the ca
-if [ -f "$basedir/cache/lock" ]; then
+if [ -f "$cachedir/lock" ]; then
     echo "error: CA locked by another process"
     exit 5
 fi
-touch "$basedir/cache/lock"
+touch "$cachedir/lock"
 
 # create the directory path
 mkdir -p "$revdir"
@@ -129,10 +134,10 @@ echo $spec > "$revdir/spec"
 logmsg="revoked $logtype $logid"
 
 # log the message
-echo $logmsg | "$basedir/bin/log" "$objdir"
+echo $logmsg | "$bindir/log" "$objdir"
 
 # remove lock
-rm "$basedir/cache/lock"
+rm "$cachedir/lock"
 
 # output message to stderr
 echo $logmsg 1>&2
