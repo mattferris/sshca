@@ -1,14 +1,13 @@
 #!/bin/bash
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-     basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+     conf="$SSHCA_CONF"
 fi
 
-bindir="$basedir/bin"
-cachedir="$basedir/cache"
-confdir="$basedir/conf"
+. "$conf"
+. "$confdir/$type.conf"
 
 # handle sigterm/sigint
 on_termint() {
@@ -40,9 +39,6 @@ if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
     echo "error: must specify 'host' or 'user'"
     exit 1
 fi
-
-. "$confdir/sshca.conf"
-. "$confdir/$type.conf"
 
 # preseve original cmd for renewal
 cmd="$@"

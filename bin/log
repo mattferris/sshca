@@ -1,13 +1,12 @@
 #!/bin/sh
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
 fi
 
-bindir="$basedir/bin"
-cachedir="$basedir/cache"
+. "$conf"
 
 getprefix() {
     echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)

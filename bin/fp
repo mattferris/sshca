@@ -1,15 +1,16 @@
 #!/bin/bash
 
-basedir="/root/sshca"
-confdir="$basedir/conf"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
 fi
 
-fingerprint_algorithm="sha1"
+. "$conf"
 
-. "$confdir/sshca.conf"
+if [ -z "$fingerprint_algorithm" ]; then
+    fingerprint_algorithm="sha1"
+fi
 
 if [ ! -z "$1" ]; then
     case $1 in
