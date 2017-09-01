@@ -6,6 +6,12 @@ if [ ! -z "$SSHCA_CONF" ]; then
      conf="$SSHCA_CONF"
 fi
 
+type=$1
+if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
+    echo "error: must specify 'host' or 'user'"
+    exit 1
+fi
+
 . "$conf"
 . "$confdir/$type.conf"
 
@@ -31,12 +37,6 @@ fi
 
 if [ -z "$1" ]; then
     echo "usage: $_zero { host | user } [ options ] ..."
-    exit 1
-fi
-
-type=$1
-if [ ! "$type" = "host" -a ! "$type" = "user" ]; then
-    echo "error: must specify 'host' or 'user'"
     exit 1
 fi
 
