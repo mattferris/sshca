@@ -1,0 +1,7 @@
+#!/bin/sh
+mkdir -p usr/bin
+cat <<EOF > usr/bin/sshca
+#!/bin/sh
+exec /usr/lib/sshca/bin/sshca \$@
+EOF
+chmod +x usr/bin/sshca

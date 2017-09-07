@@ -1,12 +1,27 @@
 #!/bin/bash
 
-conf="/root/sshca/conf/sshca.conf"
+bindir=$(dirname $0)
+libdir=$(dirname $bindir)
+
+basedir=$($bindir/basedir 2>/dev/null)
+if [ -z "$basedir" ]; then
+    basedir=$(dirname $bindir)
+fi
+export basedir
+
+confdir="$basedir/conf"
+conf="$confdir/sshca.conf"
 
 if [ ! -z "$SSHCA_CONF" ]; then
     conf="$SSHCA_CONF"
+else
+    SSHCA_CONF=$conf
 fi
+export SSHCA_CONF
 
-. "$conf"
+if [ -f "$conf" ]; then
+    . "$conf"
+fi
 
 if [ -z "$1" ]; then
     echo "usage: $_zero command [ args ]"
@@ -133,7 +148,7 @@ case $command in
         done
 
         opts="$opts $@"
-echo        "$bindir/issue" $opts
+        "$bindir/issue" $opts
 
         rtncode=$?
         if [ $rtncode -ne 0 ]; then
@@ -183,6 +198,37 @@ echo        "$bindir/issue" $opts
 
     setup)
         $bindir/setup
+        ;;
+
+    init)
+        if [ -z "$1" ]; then
+            echo "usage: $0 init <dir>"
+            exit
+        fi
+
+        dir=$1
+        if [ ! -d "$1" ]; then
+            mkdir $dir
+        fi
+
+        mkdir -p $dir/ca $dir/cache $dir/conf/profiles
+
+        export basedir="$(pwd)/$dir"
+        export SSHCA_CONF="$basedir/conf/sshca.conf"
+
+        cat <<EOF > $dir/conf/sshca.conf
+# SSHCA general config
+basedir="$basedir"
+bindir="$bindir"
+cachedir="$basedir/cache"
+confdir="$basedir/conf"
+EOF
+
+        cp "$libdir/conf/host.conf" "$libdir/conf/user.conf" "$basedir/conf"
+        cp "$libdir/conf/profiles/"* "$basedir/conf/profiles/"
+
+        cd $dir
+        $0 setup
         ;;
 
     *)
