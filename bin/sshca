@@ -222,6 +222,7 @@ basedir="$basedir"
 bindir="$bindir"
 cachedir="$basedir/cache"
 confdir="$basedir/conf"
+fingerprint_algorithm="sha1"
 EOF
 
         cp "$libdir/conf/host.conf" "$libdir/conf/user.conf" "$basedir/conf"
