@@ -213,7 +213,13 @@ case $command in
 
         mkdir -p $dir/ca $dir/cache $dir/conf/profiles
 
-        export basedir="$(pwd)/$dir"
+        if [ "$dir" = "." -o "$dir" = "./" ]; then
+            basedir=$(pwd)
+        else
+            basedir="$(pwd)/$dir"
+        fi
+
+        export basedir="$(cd $dir; pwd)"
         export SSHCA_CONF="$basedir/conf/sshca.conf"
 
         cat <<EOF > $dir/conf/sshca.conf
