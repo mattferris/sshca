@@ -1,0 +1,22 @@
+#!/bin/sh
+
+path=$(pwd)
+if [ ! -z "$1" ]; then
+    path=$1
+fi
+
+while [ ! "$found" = "true" ]; do
+    if [ "$path" = "/" ]; then
+        echo "error: can't locate base directory" 1>&2
+        exit 1
+    fi
+
+    part=$(basename $path);
+    if [ -f "$path/conf/sshca.conf" ]; then
+        found="true"
+    else
+        path=$(dirname $path)
+    fi
+done
+
+echo $path

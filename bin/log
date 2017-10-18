@@ -1,10 +1,12 @@
 #!/bin/sh
 
-basedir="/root/sshca"
+conf="/root/sshca/conf/sshca.conf"
 
-if [ ! -z "$SSHCA_BASEDIR" ]; then
-    basedir="$SSHCA_BASEDIR"
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
 fi
+
+. "$conf"
 
 getprefix() {
     echo $(echo $1 | cut -b1-2)/$(echo $1 | cut -b3-4)
@@ -28,9 +30,9 @@ read line
 eventdate=$(date)
  
 # prepare event details
-eventfp=$(echo -n $eventdate$line | "$basedir/bin/fp")
+eventfp=$(echo -n $eventdate$line | "$bindir/fp")
 eventdirprefix=$(getprefix $eventfp)
-eventdir="$basedir/cache/events/$eventdirprefix/$eventfp"
+eventdir="$cachedir/events/$eventdirprefix/$eventfp"
 
 # make sure event directory doesn't already exist
 if [ -d "$eventdir" ]; then
@@ -53,11 +55,11 @@ for obj in $eventobjs; do
     if [ -d "$obj" ]; then
 
         # link the object to the event
-        objtype=$("$basedir/bin/gettype" "$obj")
+        objtype=$("$bindir/gettype" "$obj")
         objfp=$(basename "$obj")
         objprefix=$(getprefix "$objfp")
         ln -s "../../../../../${objtype}s/$objprefix/$objfp" "$eventdir/${objtype}s/$objfp"
-        ln -s "../../../../../$eventdirprefix/$eventfp" "$basedir/cache/${objtype}s/$objprefix/$objfp/events/$eventfp"
+        ln -s "../../../../../$eventdirprefix/$eventfp" "$cachedir/${objtype}s/$objprefix/$objfp/events/$eventfp"
 
     else
         echo "error: object doesn't exist '$obj'"

@@ -1,0 +1,47 @@
+#!/bin/bash
+
+conf="/root/sshca/conf/sshca.conf"
+
+if [ ! -z "$SSHCA_CONF" ]; then
+    conf="$SSHCA_CONF"
+fi
+
+. "$conf"
+
+path=""
+basename=""
+dirname=""
+
+if [ ! -z "$1" ]; then
+    path=$1
+else
+    path=$(cat /dev/stdin)
+fi
+
+if [ ! -e "$path" ]; then
+    echo "error: path doesn't exist '$path'"
+    exit 2 
+fi
+
+if [ ! -d "$path" ]; then
+    dirname=$(dirname $path)
+    basename=$(basename $path)
+else
+    dirname=$path
+    basename=$path
+fi
+
+(
+    cd $dirname
+
+    if [ -h "$basename" ]; then
+        cd $(readlink "$basename")
+    fi
+
+    path=$(pwd)
+    baselen=$(echo "$cachedir/" | wc -c)
+    partial=$(pwd | cut -b$baselen- | cut -d/ -f1)
+    partiallen=$(echo $partial | wc -c)
+    let partiallen=partiallen-2
+    echo $partial | cut -b1-$partiallen
+)

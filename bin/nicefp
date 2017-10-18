@@ -1,7 +1,5 @@
 #!/bin/bash
 
-basedir="/root/sshca"
-
 data=""
 while read in; do
     data="$data$in"
